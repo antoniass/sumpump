@@ -5,6 +5,6 @@
 // Använd ALDRIG nyckeln som heter "service_role" eller "secret" här.
 // Anon-nyckeln är gjord för att ligga i webbsidor. Säkerheten ligger i databasreglerna.
 window.PUMPLOGG_CONFIG = {
-  SUPABASE_URL: "",
+  SUPABASE_URL: "https://girkiqchdeqicnmrivra.supabase.co/rest/v1/",
   SUPABASE_ANON_KEY: "sb_publishable_RgMupy6NkhhP58RksPg9MA_M81IwCcP"
 };
