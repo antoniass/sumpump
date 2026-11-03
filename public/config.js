@@ -6,5 +6,5 @@
 // Anon-nyckeln är gjord för att ligga i webbsidor. Säkerheten ligger i databasreglerna.
 window.PUMPLOGG_CONFIG = {
   SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: ""
+  SUPABASE_ANON_KEY: "sb_publishable_RgMupy6NkhhP58RksPg9MA_M81IwCcP"
 };
