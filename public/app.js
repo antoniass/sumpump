@@ -82,17 +82,19 @@ const ST={ej:['Ej rapporterad',''],utkast:['Utkast','warn'],inskickad:['Inskicka
 const chip=st=>'<span class="chip '+ST[st][1]+'">'+ST[st][0]+'</span>';
 const CST={ej:['Planerad',''],utkast:['Pågår','warn'],inskickad:['Utfört','acc'],godkand:['Klart','ok'],fakturerad:['Fakturerat','']};
 const cchip=st=>'<span class="chip '+CST[st][1]+'">'+CST[st][0]+'</span>';
-const cmpAsc=(a,b)=>(a.job.datum+(a.job.planerad||'')).localeCompare(b.job.datum+(b.job.planerad||''));
+const tkey=j=>j.avrop?'99:99':(j.planerad||'99:98');
+const tid=j=>j.avrop?'Avrop':(j.planerad||'–');
+const cmpAsc=(a,b)=>(a.job.datum+tkey(a.job)).localeCompare(b.job.datum+tkey(b.job));
 const cmpName=(a,b)=>String(a.namn).localeCompare(String(b.namn),'sv');
 
 // Gör om databasrader (snake_case) till de objekt vyerna använder.
 const mapAccount=r=>({id:r.id,userId:r.user_id,roll:r.roll,namn:r.namn,kontakt:r.kontakt||'',telefon:r.telefon||'',epost:r.epost||'',fordon:r.fordon||'',prislistaId:r.prislista_id,kod:''});
 const mapList=r=>({id:r.id,namn:r.namn,standard:!!r.standard,etablering:r.etablering,timpris:r.timpris,slang:r.slang,kubik:r.kubik,avetablering:r.avetablering,tvatt:r.tvatt,minTimmar:r.min_timmar,moms:r.moms,ovriga:r.ovriga||[]});
-const mapJob=r=>({id:r.id,datum:r.datum,planerad:t5(r.planerad),kundId:r.kund_id,forareId:r.chauffor_id,prislistaId:r.prislista_id,plats:r.plats,beskrivning:r.beskrivning||'',planM3:r.plan_m3||0,notis:r.notis||''});
+const mapJob=r=>({id:r.id,datum:r.datum,planerad:t5(r.planerad),kundId:r.kund_id,forareId:r.chauffor_id,prislistaId:r.prislista_id,plats:r.plats,beskrivning:r.beskrivning||'',planM3:r.plan_m3||0,slangM:r.slang_m||0,avrop:!!r.avrop,notis:r.notis||''});
 const mapReport=r=>({jobId:r.job_id,forareId:r.chauffor_id,ankomst:t5(r.ankomst),start:t5(r.start),slut:t5(r.slut),avfard:t5(r.avfard),rast:r.rast_min,m3:r.m3,slang:r.slang_m,tvatt:r.tvatt,ovriga:r.ovriga||{},mottagare:r.mottagare||'',notering:r.notering||'',status:r.status});
 const mapApproval=r=>({jobId:r.job_id,snap:r.snap,fakturerad:!!r.faktura_id,fakturaId:r.faktura_id});
 const mapInvoice=r=>({id:r.id,nummer:r.nummer,kundId:r.kund_id,rader:r.rader,net:r.netto,vat:r.moms,gross:r.brutto,skapad:r.skapad,jobIds:(r.rader||[]).map(x=>x.jobId)});
-const mapRequest=r=>({id:r.id,kundId:r.kund_id,datum:r.datum,planerad:t5(r.planerad),plats:r.plats,beskrivning:r.beskrivning||'',planM3:r.plan_m3||0,status:r.status,jobId:r.job_id,skapad:r.skapad});
+const mapRequest=r=>({id:r.id,kundId:r.kund_id,datum:r.datum,planerad:t5(r.planerad),plats:r.plats,beskrivning:r.beskrivning||'',planM3:r.plan_m3||0,slangM:r.slang_m||0,avrop:!!r.avrop,status:r.status,jobId:r.job_id,skapad:r.skapad});
 
 function derive(){
   const acc={}; state.accounts.forEach(a=>{acc[a.id]=a;});
@@ -198,10 +200,10 @@ function viewClaim(){
 function jobCard(x){
   const j=x.job;
   return '<button type="button" class="job card" data-act="open" data-id="'+esc(j.id)+'">'+
-    '<span class="job-top"><span>'+dlabel(j.datum)+' <b class="num">'+esc(j.planerad||'')+'</b></span>'+chip(x.st)+'</span>'+
+    '<span class="job-top"><span>'+dlabel(j.datum)+' <b class="num">'+esc(tid(j))+'</b></span>'+chip(x.st)+'</span>'+
     '<span class="job-kund">'+esc(kname(x))+'</span>'+
     '<span class="job-sub">'+esc(j.plats)+(j.beskrivning?' · '+esc(j.beskrivning):'')+'</span>'+
-    (j.planM3?'<span class="job-meta">Planerat '+fmtN(j.planM3,0)+' m³</span>':'')+'</button>';
+    (j.planM3||j.slangM?'<span class="job-meta">'+(j.planM3?'Planerat '+fmtN(j.planM3,0)+' m³':'')+(j.planM3&&j.slangM?' · ':'')+(j.slangM?'slang '+fmtN(j.slangM,0)+' m':'')+'</span>':'')+'</button>';
 }
 function viewDriver(d,c){
   if(state.openJob)return viewReport(d,c);
@@ -235,9 +237,9 @@ function viewReport(d,c){
     '<button type="button" class="btn" data-act="save" data-submit="0">Spara utkast</button><button type="button" class="btn pri" data-act="save" data-submit="1">Skicka in</button>');
   const ov=(x.pl.ovriga||[]).map(o=>'<div class="field"><label for="f-o-'+esc(o.id)+'">'+esc(o.namn)+', '+esc(o.enhet)+'</label><input id="f-o-'+esc(o.id)+'" class="num" inputmode="decimal" data-bind="d.ovriga.'+esc(o.id)+'" value="'+esc((dd.ovriga||{})[o.id]||'')+'" placeholder="0"'+dis+'></div>').join('');
   return '<div class="narrow form" id="form"><button type="button" class="back" data-act="back">← Mina uppdrag</button>'+
-    '<div class="card jobhead"><div class="job-top"><span>'+dlabel(j.datum)+' <b class="num">'+esc(j.planerad||'')+'</b></span>'+chip(x.st)+'</div>'+
+    '<div class="card jobhead"><div class="job-top"><span>'+dlabel(j.datum)+' <b class="num">'+esc(tid(j))+'</b></span>'+chip(x.st)+'</div>'+
     '<div class="job-kund">'+esc(kname(x))+'</div><div class="job-sub">'+esc(j.plats)+'</div>'+
-    '<div class="job-meta">'+(j.beskrivning?esc(j.beskrivning):'')+(j.planM3?(j.beskrivning?' · ':'')+'planerat '+fmtN(j.planM3,0)+' m³':'')+'</div>'+
+    '<div class="job-meta">'+(j.beskrivning?esc(j.beskrivning):'')+(j.planM3?(j.beskrivning?' · ':'')+'planerat '+fmtN(j.planM3,0)+' m³':'')+(j.slangM?(j.beskrivning||j.planM3?' · ':'')+'slang '+fmtN(j.slangM,0)+' m':'')+'</div>'+
     (j.notis?'<div class="note" style="margin-top:10px"><b>Från kontoret:</b> '+esc(j.notis)+'</div>':'')+'</div>'+
     (locked?'<div class="note">Rapporten är godkänd av kontoret och kan inte ändras här.</div>':'')+
     '<div class="g2">'+tf('ankomst','Ankomst plats')+tf('start','Start pumpning')+tf('slut','Slut pumpning')+tf('avfard','Avfärd')+'</div>'+
@@ -255,7 +257,7 @@ function viewReport(d,c){
 function initDraft(x){
   const r=x.rep||{};
   state.d={ankomst:r.ankomst||'',start:r.start||'',slut:r.slut||'',avfard:r.avfard||'',rast:r.rast!=null?String(r.rast):'0',
-    m3:r.m3?String(r.m3).replace('.',','):'',slang:r.slang!=null?String(r.slang):'0',tvatt:!!r.tvatt,
+    m3:r.m3?String(r.m3).replace('.',','):'',slang:x.rep?(r.slang!=null?String(r.slang):'0'):(x.job.slangM?String(x.job.slangM):'0'),tvatt:!!r.tvatt,
     ovriga:Object.keys(r.ovriga||{}).reduce((o,k)=>{o[k]=String(r.ovriga[k]).replace('.',',');return o;},{}),mottagare:r.mottagare||'',notering:r.notering||''};
   state.errs=[];
 }
@@ -272,7 +274,7 @@ function validate(x){
 }
 
 /* --- kund --- */
-function newReq(){ return {datum:todayStr(),planerad:'07:00',plats:'',beskrivning:'',planM3:''}; }
+function newReq(){ return {datum:todayStr(),planerad:'07:00',avrop:false,plats:'',beskrivning:'',planM3:'',slangM:''}; }
 function specTable(lines,net,vat,gross,moms){
   return '<div class="scroll"><table class="tbl"><thead><tr><th>Rad</th><th class="r">Antal</th><th class="r">À-pris</th><th class="r">Belopp</th></tr></thead><tbody>'+
     lines.map(l=>'<tr><td>'+esc(l.txt)+'</td><td class="r">'+fmtN(l.antal,2)+' '+esc(l.enhet)+'</td><td class="r">'+fmtKr(l.apris)+'</td><td class="r">'+fmtKr(l.belopp)+'</td></tr>').join('')+
@@ -286,17 +288,19 @@ function viewCustomer(d,c){
   const done=mine.filter(x=>!(x.st==='ej'||x.st==='utkast')).sort((p,q)=>cmpAsc(q,p));
   const reqs=state.requests.filter(q=>q.kundId===a.id&&q.status!=='bokad').sort((p,q)=>String(q.skapad).localeCompare(String(p.skapad)));
   const jobRow=x=>{ const j=x.job;
-    return '<div class="card"><div class="acc-row"><div><div class="job-top" style="margin-bottom:4px"><span>'+dlabel(j.datum)+' <b class="num">'+esc(j.planerad||'')+'</b></span></div><div class="rc-kund">'+esc(j.beskrivning||'Pumpuppdrag')+'</div><div class="rc-sub">'+esc(j.plats)+'</div>'+
+    return '<div class="card"><div class="acc-row"><div><div class="job-top" style="margin-bottom:4px"><span>'+dlabel(j.datum)+' <b class="num">'+esc(tid(j))+'</b></span></div><div class="rc-kund">'+esc(j.beskrivning||'Pumpuppdrag')+'</div><div class="rc-sub">'+esc(j.plats)+'</div>'+
       '<div class="job-meta">'+(x.drv?'Chaufför: '+esc(x.drv.namn)+(x.drv.fordon?' · '+esc(x.drv.fordon):''):'Chaufför tilldelas snart')+'</div></div>'+cchip(x.st)+'</div>'+
       ((x.st==='godkand'||x.st==='fakturerad')&&x.calc?'<div class="rc-sum"><span>Belopp exkl. moms</span><b>'+fmtKr(x.calc.net)+'</b></div><div class="rc-act"><button type="button" class="btn sm" data-act="toggle" data-id="'+esc(j.id)+'" aria-expanded="'+!!state.expanded[j.id]+'">'+(state.expanded[j.id]?'Dölj specifikation':'Visa specifikation')+'</button></div>'+
         (state.expanded[j.id]?'<div class="detail">'+kv([['Pumpat',fmtN(x.rep.m3,1)+' m³'],['Tid på plats',x.calc.onSite!=null?fmtDur(x.calc.onSite):'–']])+specTable(x.calc.lines,x.calc.net,x.calc.vat,x.calc.gross,momsOf(x))+'</div>':''):'')+'</div>'; };
-  const form='<div class="card form"><div class="g2"><div class="field"><label for="r-datum">Önskat datum</label><input id="r-datum" type="date" data-bind="rf.datum" value="'+esc(f.datum)+'"></div><div class="field"><label for="r-tid">Önskad starttid</label><input id="r-tid" type="time" data-bind="rf.planerad" value="'+esc(f.planerad)+'"></div></div>'+
+  const form='<div class="card form"><div class="g2"><div class="field"><label for="r-datum">Önskat datum</label><input id="r-datum" type="date" data-bind="rf.datum" value="'+esc(f.datum)+'"></div><div class="field"><label for="r-tid">Önskad starttid</label><input id="r-tid" type="time" data-bind="rf.planerad" value="'+esc(f.planerad)+'"'+(f.avrop?' disabled':'')+'></div></div>'+
+    '<label class="chk"><input type="checkbox" data-bind="rf.avrop" data-rerender="1"'+(f.avrop?' checked':'')+'>På avrop, ingen bestämd starttid</label>'+
     '<div class="field"><label for="r-plats">Plats</label><input id="r-plats" data-bind="rf.plats" placeholder="Adress, ort" value="'+esc(f.plats)+'"></div>'+
     '<div class="g2"><div class="field"><label for="r-besk">Vad ska gjutas</label><input id="r-besk" data-bind="rf.beskrivning" placeholder="Platta, bjälklag, väggar" value="'+esc(f.beskrivning)+'"></div><div class="field"><label for="r-m3">Ungefärlig mängd, m³</label><input id="r-m3" class="num" inputmode="decimal" data-bind="rf.planM3" value="'+esc(f.planM3)+'"></div></div>'+
+    '<div class="field"><label for="r-slang">Slang, meter</label><input id="r-slang" class="num" inputmode="decimal" data-bind="rf.slangM" value="'+esc(f.slangM)+'"></div>'+
     '<div class="row-btns"><button type="button" class="btn pri" data-act="reqsend">Skicka förfrågan</button></div></div>';
   return '<div class="narrow"><h2>'+esc(a.namn)+'</h2><p class="lead">Här ser du dina pumpuppdrag, vem som kommer och vad som ska faktureras.</p>'+
     '<h2>Begär pump</h2>'+form+
-    (reqs.length?'<h2>Förfrågningar <small>'+reqs.length+'</small></h2><div class="stack">'+reqs.map(q=>'<div class="card acc-row"><div><b>'+dlabel(q.datum)+' '+esc(q.planerad||'')+'</b><div class="job-meta">'+esc(q.plats)+(q.beskrivning?' · '+esc(q.beskrivning):'')+'</div></div><span class="chip '+(q.status==='avvisad'?'bad':'warn')+'">'+(q.status==='avvisad'?'Kan inte tas':'Skickad')+'</span></div>').join('')+'</div>':'')+
+    (reqs.length?'<h2>Förfrågningar <small>'+reqs.length+'</small></h2><div class="stack">'+reqs.map(q=>'<div class="card acc-row"><div><b>'+dlabel(q.datum)+' '+esc(tid(q))+'</b><div class="job-meta">'+esc(q.plats)+(q.beskrivning?' · '+esc(q.beskrivning):'')+'</div></div><span class="chip '+(q.status==='avvisad'?'bad':'warn')+'">'+(q.status==='avvisad'?'Kan inte tas':'Skickad')+'</span></div>').join('')+'</div>':'')+
     '<h2>Bokade uppdrag <small>'+open.length+'</small></h2>'+(open.length?'<div class="stack">'+open.map(jobRow).join('')+'</div>':empty('Inga bokade uppdrag','Skicka en förfrågan ovan så bokar kontoret in en pump.'))+
     (done.length?'<h2>Utförda <small>'+done.length+'</small></h2><div class="stack">'+done.map(jobRow).join('')+'</div>':'')+'</div>';
 }
@@ -313,14 +317,14 @@ function viewCalendar(d){
   const dows=['Mån','Tis','Ons','Tors','Fre','Lör','Sön'].map(s=>'<div class="dow">'+s+'</div>').join('');
   const grid=cells.map(ce=>{
     const l=byDate[ce.date]||[];
-    const chips=l.slice(0,3).map(x=>'<span class="dc'+(x.job.forareId?'':' un')+'" title="'+esc(kname(x)+' · '+(x.drv?x.drv.namn:'Ej tilldelad'))+'"><b>'+esc(x.job.planerad||'')+'</b> '+esc(kname(x))+'</span>').join('');
+    const chips=l.slice(0,3).map(x=>'<span class="dc'+(x.job.forareId?'':' un')+'" title="'+esc(kname(x)+' · '+(x.drv?x.drv.namn:'Ej tilldelad'))+'"><b>'+esc(tid(x.job))+'</b> '+esc(kname(x))+'</span>').join('');
     return '<button type="button" class="day'+(ce.inMonth?'':' out')+(ce.date===today?' today':'')+(ce.date===cal.sel?' sel':'')+'" data-act="seld" data-d="'+ce.date+'" aria-label="'+esc(dlong(ce.date))+', '+l.length+' uppdrag"><span class="dn">'+ce.day+'</span>'+chips+
       (l.length>3?'<span class="more">+'+(l.length-3)+' till</span>':'')+(l.length?'<span class="dots">'+l.slice(0,5).map(x=>'<i'+(x.job.forareId?'':' class="un"')+'></i>').join('')+'</span>':'')+'</button>';
   }).join('');
   const sel=byDate[cal.sel]||[];
   const dayRows=sel.map(x=>{
     const j=x.job;
-    return '<div class="card jrow"><div class="jt">'+esc(j.planerad||'–')+'</div><div style="min-width:0"><div class="rc-kund">'+esc(kname(x))+'</div><div class="rc-sub">'+esc(j.plats)+(j.beskrivning?' · '+esc(j.beskrivning):'')+(j.planM3?' · '+fmtN(j.planM3,0)+' m³':'')+'</div></div>'+
+    return '<div class="card jrow"><div class="jt">'+esc(tid(j))+'</div><div style="min-width:0"><div class="rc-kund">'+esc(kname(x))+'</div><div class="rc-sub">'+esc(j.plats)+(j.beskrivning?' · '+esc(j.beskrivning):'')+(j.planM3?' · '+fmtN(j.planM3,0)+' m³':'')+'</div></div>'+
       '<div class="jc"><label class="lbl" for="a-'+esc(j.id)+'">Chaufför</label><select id="a-'+esc(j.id)+'" data-act="assign" data-id="'+esc(j.id)+'"><option value="">Ej tilldelad</option>'+d.drivers.map(a=>'<option value="'+esc(a.id)+'"'+(a.id===j.forareId?' selected':'')+'>'+esc(a.namn)+'</option>').join('')+'</select></div>'+
       '<div class="jb">'+chip(x.st)+'<button type="button" class="btn sm" data-act="jobedit" data-id="'+esc(j.id)+'">Ändra</button></div></div>';
   }).join('');
@@ -332,17 +336,19 @@ function viewCalendar(d){
 }
 
 /* --- admin: uppdrag --- */
-function newJob(date){ return {id:null,requestId:null,datum:date||todayStr(),planerad:'07:00',kundId:'',plats:'',beskrivning:'',forareId:'',prislistaId:'',planM3:'',notis:''}; }
+function newJob(date){ return {id:null,requestId:null,datum:date||todayStr(),planerad:'07:00',kundId:'',plats:'',beskrivning:'',forareId:'',prislistaId:'',planM3:'',slangM:'',avrop:false,notis:''}; }
 function viewJobs(d){
   if(!state.jf)state.jf=newJob(); const f=state.jf;
   const reqs=state.requests.filter(q=>q.status==='ny').sort((a,b)=>String(a.skapad).localeCompare(String(b.skapad)));
   const reqHtml=reqs.length?'<h2>Förfrågningar från kunder <small>'+reqs.length+'</small></h2><div class="stack">'+reqs.map(q=>{ const k=d.acc[q.kundId];
-    return '<div class="card acc-row"><div><b>'+esc(k?k.namn:'Okänd kund')+'</b><div class="job-meta">'+dlabel(q.datum)+' '+esc(q.planerad||'')+' · '+esc(q.plats)+(q.beskrivning?' · '+esc(q.beskrivning):'')+(q.planM3?' · ca '+fmtN(q.planM3,0)+' m³':'')+'</div></div>'+
+    return '<div class="card acc-row"><div><b>'+esc(k?k.namn:'Okänd kund')+'</b><div class="job-meta">'+dlabel(q.datum)+' '+esc(tid(q))+' · '+esc(q.plats)+(q.beskrivning?' · '+esc(q.beskrivning):'')+(q.planM3?' · ca '+fmtN(q.planM3,0)+' m³':'')+(q.slangM?' · slang '+fmtN(q.slangM,0)+' m':'')+'</div></div>'+
       '<div class="row-btns"><button type="button" class="btn sm pri" data-act="reqbook" data-id="'+esc(q.id)+'">Skapa uppdrag</button><button type="button" class="btn sm" data-act="reqno" data-id="'+esc(q.id)+'">Avvisa</button></div></div>'; }).join('')+'</div>':'';
-  const form='<div class="card form"><div class="g3">'+
+  const form='<div class="card form"><div class="g2">'+
     '<div class="field"><label for="j-datum">Datum</label><input id="j-datum" type="date" data-bind="jf.datum" value="'+esc(f.datum)+'"></div>'+
-    '<div class="field"><label for="j-tid">Planerad start</label><input id="j-tid" type="time" data-bind="jf.planerad" value="'+esc(f.planerad)+'"></div>'+
-    '<div class="field"><label for="j-m3">Planerad mängd, m³</label><input id="j-m3" class="num" inputmode="decimal" data-bind="jf.planM3" value="'+esc(f.planM3)+'"></div></div>'+
+    '<div class="field"><label for="j-tid">Starttid</label><input id="j-tid" type="time" data-bind="jf.planerad" value="'+esc(f.planerad)+'"'+(f.avrop?' disabled':'')+'></div></div>'+
+    '<label class="chk"><input type="checkbox" data-bind="jf.avrop" data-rerender="1"'+(f.avrop?' checked':'')+'>På avrop, ingen bestämd starttid</label>'+
+    '<div class="g2"><div class="field"><label for="j-m3">Planerad mängd, m³</label><input id="j-m3" class="num" inputmode="decimal" data-bind="jf.planM3" value="'+esc(f.planM3)+'"></div>'+
+    '<div class="field"><label for="j-slang">Slang, meter</label><input id="j-slang" class="num" inputmode="decimal" data-bind="jf.slangM" value="'+esc(f.slangM)+'"></div></div>'+
     '<div class="g2"><div class="field"><label for="j-kund">Kund</label><select id="j-kund" data-bind="jf.kundId"><option value="">Välj kund</option>'+d.customers.map(k=>'<option value="'+esc(k.id)+'"'+(k.id===f.kundId?' selected':'')+'>'+esc(k.namn)+'</option>').join('')+'</select>'+(d.customers.length?'':'<div class="hint">Lägg först upp en kund under Konton.</div>')+'</div>'+
     '<div class="field"><label for="j-plats">Plats</label><input id="j-plats" data-bind="jf.plats" placeholder="Adress, ort" value="'+esc(f.plats)+'"></div></div>'+
     '<div class="field"><label for="j-besk">Vad ska gjutas</label><input id="j-besk" data-bind="jf.beskrivning" placeholder="Till exempel platta på mark, bjälklag plan 2" value="'+esc(f.beskrivning)+'"></div>'+
@@ -352,7 +358,7 @@ function viewJobs(d){
     '<div class="row-btns"><button type="button" class="btn pri" data-act="jobsave">'+(f.id?'Spara ändringar':'Lägg till uppdrag')+'</button>'+(f.id?'<button type="button" class="btn" data-act="jobnew">Avbryt</button>':'')+'</div></div>';
   const list=d.rows.slice().sort((a,b)=>cmpAsc(b,a));
   const items=list.length?'<div class="stack">'+list.map(x=>
-    '<div class="card inv"><div><b>'+esc(kname(x))+'</b><div class="job-meta">'+dlabel(x.job.datum)+' '+esc(x.job.planerad||'')+' · '+esc(x.job.plats)+' · '+(x.drv?esc(x.drv.namn):'<span style="color:var(--warn);font-weight:600">Ej tilldelad</span>')+'</div></div>'+
+    '<div class="card inv"><div><b>'+esc(kname(x))+'</b><div class="job-meta">'+dlabel(x.job.datum)+' '+esc(tid(x.job))+' · '+esc(x.job.plats)+' · '+(x.drv?esc(x.drv.namn):'<span style="color:var(--warn);font-weight:600">Ej tilldelad</span>')+'</div></div>'+
     '<div class="row-btns" style="align-items:center">'+chip(x.st)+'<button type="button" class="btn sm" data-act="jobedit" data-id="'+esc(x.job.id)+'">Ändra</button>'+
     (x.st==='ej'?(state.confirm==='del:'+x.job.id?'<button type="button" class="btn sm bad" data-act="jobdelok" data-id="'+esc(x.job.id)+'">Ta bort</button><button type="button" class="btn sm" data-act="cancel">Behåll</button>':'<button type="button" class="btn sm" data-act="jobdel" data-id="'+esc(x.job.id)+'">Ta bort</button>'):'')+'</div></div>').join('')+'</div>':
     empty('Inga uppdrag ännu','Lägg upp det första uppdraget ovan.');
@@ -565,21 +571,21 @@ document.addEventListener('click',e=>{
   else if(a==='seld'){ state.cal.sel=t.dataset.d; if(t.dataset.d.slice(0,7)!==state.cal.ym)state.cal.ym=t.dataset.d.slice(0,7); render(true); }
   /* uppdrag */
   else if(a==='jobnew'){ state.jf=newJob(t.dataset.d); if(location.hash!=='#uppdrag')location.hash='uppdrag'; else render(true); goForm(); }
-  else if(a==='jobedit'){ const j=d.byId[id].job; state.jf={id:j.id,requestId:null,datum:j.datum,planerad:j.planerad||'',kundId:j.kundId||'',plats:j.plats||'',beskrivning:j.beskrivning||'',forareId:j.forareId||'',prislistaId:j.prislistaId||'',planM3:j.planM3?String(j.planM3):'',notis:j.notis||''}; if(location.hash!=='#uppdrag')location.hash='uppdrag'; else render(true); goForm(); }
+  else if(a==='jobedit'){ const j=d.byId[id].job; state.jf={id:j.id,requestId:null,datum:j.datum,planerad:j.planerad||'',kundId:j.kundId||'',plats:j.plats||'',beskrivning:j.beskrivning||'',forareId:j.forareId||'',prislistaId:j.prislistaId||'',planM3:j.planM3?String(j.planM3):'',slangM:j.slangM?String(j.slangM):'',avrop:!!j.avrop,notis:j.notis||''}; if(location.hash!=='#uppdrag')location.hash='uppdrag'; else render(true); goForm(); }
   else if(a==='jobsave'){ run(async()=>{
     const f=state.jf; if(!f.kundId||!f.plats.trim()||!f.datum){ toast('Fyll i datum, kund och plats.'); return; }
-    const row={datum:f.datum,planerad:orNull(f.planerad),kund_id:f.kundId,plats:f.plats.trim(),beskrivning:f.beskrivning.trim(),chauffor_id:f.forareId||null,prislista_id:f.prislistaId||null,plan_m3:num(f.planM3)||null,notis:f.notis.trim()};
+    const row={datum:f.datum,planerad:f.avrop?null:orNull(f.planerad),avrop:!!f.avrop,slang_m:num(f.slangM)||null,kund_id:f.kundId,plats:f.plats.trim(),beskrivning:f.beskrivning.trim(),chauffor_id:f.forareId||null,prislista_id:f.prislistaId||null,plan_m3:num(f.planM3)||null,notis:f.notis.trim()};
     let msg;
     if(f.id){ ok(await sb.from('jobs').update(row).eq('id',f.id)); msg='Uppdraget är sparat.'; }
     else{ const nj=ok(await sb.from('jobs').insert(row).select().single()); if(f.requestId)ok(await sb.from('requests').update({status:'bokad',job_id:nj.id}).eq('id',f.requestId)); msg='Uppdraget är tillagt.'; state.cal.sel=f.datum; state.cal.ym=f.datum.slice(0,7); }
     state.jf=newJob(); await afterWrite(msg); }); }
   else if(a==='jobdel'){ state.confirm='del:'+id; render(true); }
   else if(a==='jobdelok'){ run(async()=>{ ok(await sb.from('jobs').delete().eq('id',id)); state.confirm=null; await afterWrite('Uppdraget är borttaget.'); }); }
-  else if(a==='reqbook'){ const q=state.requests.find(v=>v.id===id); if(!q)return; state.jf=Object.assign(newJob(q.datum),{requestId:q.id,planerad:q.planerad||'07:00',kundId:q.kundId,plats:q.plats||'',beskrivning:q.beskrivning||'',planM3:q.planM3?String(q.planM3):''}); render(true); goForm(); }
+  else if(a==='reqbook'){ const q=state.requests.find(v=>v.id===id); if(!q)return; state.jf=Object.assign(newJob(q.datum),{requestId:q.id,planerad:q.planerad||'07:00',avrop:!!q.avrop,slangM:q.slangM?String(q.slangM):'',kundId:q.kundId,plats:q.plats||'',beskrivning:q.beskrivning||'',planM3:q.planM3?String(q.planM3):''}); render(true); goForm(); }
   else if(a==='reqno'){ run(async()=>{ ok(await sb.from('requests').update({status:'avvisad'}).eq('id',id)); await afterWrite('Förfrågan är avvisad.'); }); }
   else if(a==='reqsend'){ run(async()=>{
     const f=state.rf; if(!f.plats.trim()||!f.datum){ toast('Fyll i datum och plats.'); return; }
-    ok(await sb.from('requests').insert({kund_id:c.acc.id,datum:f.datum,planerad:orNull(f.planerad),plats:f.plats.trim(),beskrivning:f.beskrivning.trim(),plan_m3:num(f.planM3)||null}));
+    ok(await sb.from('requests').insert({kund_id:c.acc.id,datum:f.datum,planerad:f.avrop?null:orNull(f.planerad),avrop:!!f.avrop,slang_m:num(f.slangM)||null,plats:f.plats.trim(),beskrivning:f.beskrivning.trim(),plan_m3:num(f.planM3)||null}));
     state.rf=newReq(); await afterWrite('Förfrågan är skickad.'); }); }
   /* godkänna och faktura */
   else if(a==='approve'){ run(async()=>{ ok(await sb.from('approvals').insert(approveRow(d.byId[id]))); await afterWrite('Godkänd.'); }); }

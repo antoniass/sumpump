@@ -52,3 +52,8 @@ insert into public.approvals (job_id, snap) values
 
 insert into public.requests (kund_id, datum, planerad, plats, beskrivning, plan_m3) values
  ('e0000000-0000-0000-0000-000000000005', current_date+4,'08:00','Kvarnbacken 3, Sollentuna','Platta garage',20);
+
+-- Planerad slang och avrop på några av uppdragen.
+update public.jobs set slang_m = 30 where id in ('e0000000-0000-0000-0000-000000000205','e0000000-0000-0000-0000-000000000207');
+update public.jobs set slang_m = 20 where id = 'e0000000-0000-0000-0000-000000000209';
+update public.jobs set avrop = true, planerad = null where id in ('e0000000-0000-0000-0000-000000000208','e0000000-0000-0000-0000-000000000209');

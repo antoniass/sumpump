@@ -57,6 +57,8 @@ create table public.jobs (
   plats         text not null,
   beskrivning   text,
   plan_m3       numeric,
+  slang_m       numeric,                       -- planerad slang i meter
+  avrop         boolean not null default false, -- true = ingen bestämd starttid, körs på avrop
   notis         text,
   created_at    timestamptz not null default now()
 );
@@ -112,6 +114,8 @@ create table public.requests (
   plats        text not null,
   beskrivning  text,
   plan_m3      numeric,
+  slang_m      numeric,
+  avrop        boolean not null default false,
   status       text not null default 'ny' check (status in ('ny','bokad','avvisad')),
   job_id       uuid references public.jobs(id) on delete set null,
   skapad       timestamptz not null default now()
